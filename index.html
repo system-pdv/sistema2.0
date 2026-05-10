@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Sistema PDV - Mini Mercado</title>
+    
+    <script>
+        if (sessionStorage.getItem('estaLogado') !== 'true') {
+            window.location.href = 'login.html';
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<nav class="no-print">
+    <div class="nav-group">
+        <button class="nav-link active" onclick="openTab('vendas')">🛒 PDV</button>
+        <button class="nav-link" onclick="openTab('estoque')">📦 Estoque</button>
+        <button id="btn-nav-dash" class="nav-link" onclick="openTab('dashboard')">📊 Dashboard</button>
+    </div>
+    
+    <div style="display: flex; align-items: center; gap: 15px;">
+        <span id="info-usuario" style="color: var(--text); font-size: 14px; opacity: 0.9; font-weight: bold;"></span>
+        <button onclick="openTab('config')" style="background: none; border: none; color: white; cursor: pointer; font-size: 18px;" title="Configurações">⚙️</button>
+        <button class="btn-sair" onclick="sair()">🚪 SAIR</button>
+    </div>
+</nav>
+
+<div id="cupom-impressao"></div>
+
+<div class="container no-print">
+    <div id="vendas" class="tab-content active">
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+            <div class="card">
+                <h2>Frente de Caixa</h2>
+                <input type="text" id="pdv-busca" style="width: 95%; font-size: 20px;" placeholder="Bipe o código..." autofocus>
+                <table>
+                    <thead><tr><th>Produto</th><th>Qtd</th><th>Preço</th><th>Total</th><th>Ação</th></tr></thead>
+                    <tbody id="pdv-lista"></tbody>
+                </table>
+            </div>
+            <div class="card" style="text-align: center;">
+                <h3>Total</h3>
+                <h1 style="font-size: 50px; color: var(--success);">R$ <span id="pdv-total">0,00</span></h1>
+                <p>Pagamento:</p>
+                <select id="pdv-pagamento" style="width: 100%; font-size: 18px;" onchange="verificarDinheiro()">
+                    <option value="Dinheiro">F1 - Dinheiro</option>
+                    <option value="Pix">F2 - Pix</option>
+                    <option value="Débito">F3 - Débito</option>
+                    <option value="Crédito">F4 - Crédito</option>
+                </select>
+
+                <div id="secao-troco" style="margin-top: 15px; background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px solid #ddd;">
+                    <label>Valor Recebido:</label><br>
+                    <input type="number" id="pdv-recebido" step="0.01" style="width: 80%; font-size: 22px; text-align: center; font-weight: bold;" placeholder="0,00" oninput="calcularTroco()">
+                    <h3 style="margin-top: 10px; color: var(--danger); margin-bottom: 0;">Troco: R$ <span id="pdv-troco">0,00</span></h3>
+                </div>
+
+                <button class="btn btn-success" style="width: 100%; height: 60px; margin-top: 20px;" onclick="finalizarVenda()">FINALIZAR [F5]</button>
+                <button class="btn btn-danger" style="width: 100%; margin-top: 10px;" onclick="limparPdv()">LIMPAR TUDO</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="estoque" class="tab-content">
+        <div class="card">
+            <h2 id="titulo-form">Novo Produto</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px;">
+                <input type="text" id="est-codigo" placeholder="Código">
+                <input type="text" id="est-nome" placeholder="Nome">
+                <input type="text" id="est-categoria" placeholder="Categoria">
+                <input type="number" id="est-custo" step="0.01" placeholder="Custo">
+                <input type="number" id="est-venda" step="0.01" placeholder="Venda">
+                <input type="number" id="est-qtd" placeholder="Qtd">
+                <button class="btn btn-success" onclick="salvarEstoque()">Salvar</button>
+                <button id="btn-cancelar" class="btn btn-danger" style="display:none" onclick="cancelarEdicao()">Cancelar</button>
+            </div>
+        </div>
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 style="margin:0">Inventário</h3>
+                <button class="btn btn-sm" style="background: #34495e; color: white;" onclick="baixarCSVEstoque()">📥 Baixar CSV</button>
+            </div>
+            <table>
+                <thead><tr><th>Código</th><th>Produto</th><th>Categoria</th><th>Venda</th><th>Estoque</th><th>Ações</th></tr></thead>
+                <tbody id="tabela-inventario"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="dashboard" class="tab-content">
+        <div class="card">
+            <h3>Filtros de Relatório</h3>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                <input type="date" id="data-inicio"> até <input type="date" id="data-fim">
+                <select id="dash-filtro-produto"><option value="todos">Todos os Produtos</option></select>
+                <select id="dash-filtro-pagamento">
+                    <option value="todos">Todas as Formas</option>
+                    <option value="Dinheiro">Dinheiro</option>
+                    <option value="Pix">Pix</option>
+                    <option value="Débito">Débito</option>
+                    <option value="Crédito">Crédito</option>
+                </select>
+                <button class="btn btn-warning" onclick="carregarDash()">Filtrar Agora</button>
+                <button class="btn" style="background: #34495e; color: white;" onclick="baixarCSVVendas()">📥 Baixar CSV</button>
+            </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
+            <div class="card">
+                <h4>Resumo Financeiro</h4>
+                <p>Custo Total: <span id="dash-custo-total" style="font-weight: bold; color: var(--danger);">R$ 0,00</span></p>
+                <p>Venda Total: <span id="dash-fatur" style="font-weight: bold; color: var(--success);">R$ 0,00</span></p>
+                <hr>
+                <p>Lucro Estimado: <span id="dash-lucro" style="font-weight: bold; font-size: 1.2em; color: var(--accent);">R$ 0,00</span></p>
+            </div>
+            <div class="card"><h4>Vendas Hoje</h4><h2 id="dash-hoje">0</h2></div>
+            <div class="card"><h4>Estoque Baixo</h4><ul id="dash-alertas"></ul></div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div class="card"><canvas id="chartProdutos"></canvas></div>
+            <div class="card"><canvas id="chartFinanceiro"></canvas></div>
+        </div>
+    </div>
+
+    <div id="config" class="tab-content">
+        <div class="card" style="max-width: 450px; margin: 0 auto 20px auto;">
+            <h2>Minha Conta</h2>
+            <p>Alterar minha senha atual:</p>
+            <input type="password" id="novaSenhaInput" style="width: 90%;" placeholder="Nova senha">
+            <button class="btn btn-success" style="width: 100%; margin-top: 10px;" onclick="alterarSenha()">SALVAR MINHA SENHA</button>
+        </div>
+
+        <div id="painel-admin" class="card" style="max-width: 450px; margin: 0 auto; display: none; border: 2px solid var(--accent);">
+            <h2 style="color: var(--accent)">🛠️ Gerenciamento de Licenças</h2>
+            <p>Usuário atual para editar:</p>
+            <select id="admin-selecionar-usuario" style="width: 100%; margin-bottom: 10px;" onchange="preencherDadosAdmin(this.value)">
+                <option value="">Selecione um usuário...</option>
+            </select>
+            
+            <label>Nome de Usuário (Login):</label>
+            <input type="text" id="admin-novo-nome" style="width: 90%; margin-bottom: 10px;" placeholder="Nome atual">
+
+            <label>Senha:</label>
+            <input type="text" id="admin-nova-senha" style="width: 90%; margin-bottom: 10px;" placeholder="Senha atual">
+            
+            <label>Status:</label>
+            <select id="admin-novo-status" style="width: 100%; margin-bottom: 10px;">
+                <option value=""></option>
+                <option value="ativo">ativo</option>
+                <option value="bloqueado">bloqueado</option>
+            </select>
+
+            <label>Data de Vencimento:</label>
+            <input type="date" id="admin-vencimento" style="width: 90%; margin-bottom: 10px;">
+
+            <label>Nível de Acesso:</label>
+            <select id="admin-novo-nivel" style="width: 100%; margin-bottom: 10px;">
+                <option value=""></option>
+                <option value="operador">Operador (Apenas PDV/Estoque)</option>
+                <option value="gerente">Gerente (PDV/Estoque/Dash)</option>
+                <option value="admin">Administrador (Acesso Total)</option>
+            </select>
+            
+            <button class="btn btn-warning" style="width: 100%; margin-top: 15px;" onclick="salvarAlteracoesAdmin()">
+                ATUALIZAR DADOS
+            </button>
+        </div>
+    </div>
+</div>
+
+<script type="module" src="js/firebase.js"></script>
+<script type="module" src="js/pdv.js"></script>
+<script type="module" src="js/estoque.js"></script>
+<script type="module" src="js/dashboard.js"></script>
+<script type="module" src="js/admin.js"></script>
+
+<script src="js/main.js"></script>
+<script src="js/eventos.js"></script>
+
+</body>
+</html>
