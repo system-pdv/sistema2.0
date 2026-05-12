@@ -20,11 +20,15 @@
         <input type="text" id="usuario" placeholder="Usuário">
         <input type="password" id="senha" placeholder="Senha">
         <button onclick="fazerLogin()">Entrar</button>
+        <p style="margin-top:10px;">
+  <a href="#" onclick="resetarSenha()" style="font-size:14px;">Esqueci minha senha</a>
+</p>
         <div id="mensagem-erro"></div>
     </div>
 
     <!-- Scripts do Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
     <script>
@@ -39,71 +43,106 @@
             measurementId: "G-3CRCHVSWP9"
         };
 
-        // Inicializa o Firebase
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
-        const db = firebase.firestore();
+// Inicializa o Firebase
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
 
-        async function fazerLogin() {
-            const usuarioDigitado = document.getElementById('usuario').value;
-            const senhaDigitada = document.getElementById('senha').value;
-            const erroDiv = document.getElementById('mensagem-erro');
+const db = firebase.firestore();
+const auth = firebase.auth();
 
-            if (!usuarioDigitado || !senhaDigitada) {
-                erroDiv.innerText = "Preencha todos os campos.";
+async function fazerLogin() {
+    const usuarioDigitado = document.getElementById('usuario').value;
+    const senhaDigitada = document.getElementById('senha').value;
+    const erroDiv = document.getElementById('mensagem-erro');
+
+    if (!usuarioDigitado || !senhaDigitada) {
+        erroDiv.innerText = "Preencha todos os campos.";
+        return;
+    }
+
+    erroDiv.innerText = "Verificando...";
+
+    try {
+        const usuariosRef = db.collection("usuarios");
+        const snapshot = await usuariosRef.where("usuario", "==", usuarioDigitado).get();
+
+        if (!snapshot.empty) {
+            const doc = snapshot.docs[0];
+            const dados = doc.data();
+
+            try {
+                await auth.signInWithEmailAndPassword(dados.email, senhaDigitada);
+                console.log("Auth OK");
+            } catch (error) {
+                console.log("Erro Auth:", error.message);
+                erroDiv.innerText = "Email ou senha inválidos";
                 return;
             }
 
-            erroDiv.innerText = "Verificando...";
-
-            try {
-                // CORREÇÃO: Busca por campo 'usuario' em vez de ID do documento
-                const usuariosRef = db.collection("usuarios");
-                const snapshot = await usuariosRef.where("usuario", "==", usuarioDigitado).get();
-
-                if (!snapshot.empty) {
-                    const doc = snapshot.docs[0];
-                    const dados = doc.data();
-
-                    // Validação de Senha
-                    if (dados.senha === senhaDigitada) {
-                        
-                        // Validação de Status (caso o campo exista)
-                        if (dados.status && dados.status !== "ativo") {
-                            erroDiv.innerText = "Usuário bloqueado!";
-                            return;
-                        }
-
-                        // Validação de Vencimento
-                        const hoje = new Date().toISOString().split('T')[0];
-                        if (dados.vencimento && dados.vencimento < hoje) {
-                            erroDiv.innerText = "Licença expirada em: " + dados.vencimento;
-                            return;
-                        }
-
-                        // Login Sucesso
-                        sessionStorage.setItem('estaLogado', 'true');
-                        sessionStorage.setItem('nomeUsuario', dados.usuario); 
-                        sessionStorage.setItem('nivelUsuario', dados.nivel || 'comum'); 
-                        
-                        window.location.href = 'index.html';
-                    } else {
-                        erroDiv.innerText = "Senha incorreta!";
-                    }
-                } else {
-                    erroDiv.innerText = "Usuário não encontrado!";
-                }
-            } catch (err) {
-                console.error(err);
-                erroDiv.innerText = "Erro ao conectar com o Firebase.";
+            if (dados.status && dados.status !== "ativo") {
+                erroDiv.innerText = "Usuário bloqueado!";
+                return;
             }
+
+            const hoje = new Date().toISOString().split('T')[0];
+            if (dados.vencimento && dados.vencimento < hoje) {
+                erroDiv.innerText = "Licença expirada em: " + dados.vencimento;
+                return;
+            }
+
+            sessionStorage.setItem('estaLogado', 'true');
+            sessionStorage.setItem('nomeUsuario', dados.usuario); 
+            sessionStorage.setItem('nivelUsuario', dados.nivel || 'comum'); 
+            
+            window.location.href = 'index.html';
+
+        } else {
+            erroDiv.innerText = "Usuário não encontrado!";
+        }
+    } catch (err) {
+        console.error(err);
+        erroDiv.innerText = "Erro ao conectar com o Firebase.";
+    }
+}
+
+
+// 👇 ESQUECI SENHA
+async function resetarSenha() {
+    const usuarioDigitado = document.getElementById('usuario').value;
+    const erroDiv = document.getElementById('mensagem-erro');
+
+    if (!usuarioDigitado) {
+        erroDiv.innerText = "Digite seu usuário primeiro.";
+        return;
+    }
+
+    erroDiv.innerText = "Buscando email...";
+
+    try {
+        const snapshot = await db.collection("usuarios")
+            .where("usuario", "==", usuarioDigitado)
+            .get();
+
+        if (snapshot.empty) {
+            erroDiv.innerText = "Usuário não encontrado!";
+            return;
         }
 
-        // Atalho para o teclado
-        document.addEventListener('keypress', (e) => {
-            if(e.key === 'Enter') fazerLogin();
-        });
+        const dados = snapshot.docs[0].data();
+
+        await auth.sendPasswordResetEmail(dados.email);
+
+        erroDiv.innerText = "Email enviado! Verifique sua caixa de entrada ou spam.";
+    } catch (error) {
+        console.error(error);
+        erroDiv.innerText = "Erro ao enviar email.";
+    }
+}
+
+document.addEventListener('keypress', (e) => {
+    if(e.key === 'Enter') fazerLogin();
+});
     </script>
 </body>
 </html>
