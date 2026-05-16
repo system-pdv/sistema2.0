@@ -3,25 +3,67 @@ import { collection, addDoc, getDocs, updateDoc, doc, query, where, increment } 
 
 let carrinho = [];
 
+// 🔥 CACHE
+let cacheProdutos = [];
+let ultimaAtualizacao = 0;
+const TEMPO_CACHE = 5 * 60 * 1000; // 5 minutos
+
+// 🔥 CARREGAR PRODUTOS
+async function carregarProdutos(force = false) {
+    const agora = Date.now();
+
+    if (!force && cacheProdutos.length && (agora - ultimaAtualizacao < TEMPO_CACHE)) {
+        return;
+    }
+
+    const snap = await getDocs(collection(db, "produtos"));
+    cacheProdutos = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    ultimaAtualizacao = agora;
+}
+
+// 🔥 CARREGA AO INICIAR
+carregarProdutos();
+
+// ❌ REMOVIDO: setInterval que causava consumo de leitura
+
 document.getElementById('pdv-busca').addEventListener('keypress', async (e) => {
     if(e.key === 'Enter') {
         const cod = e.target.value.trim();
         if(!cod) return;
-        
+
         const index = carrinho.findIndex(item => item.codigo === cod);
-        
+
         if (index !== -1) {
             carrinho[index].qtd_carrinho += 1;
             atualizarPdv();
         } else {
-            const q = query(collection(db, "produtos"), where("codigo", "==", cod));
-            const snap = await getDocs(q);
-            if(!snap.empty) {
-                const p = { id: snap.docs[0].id, ...snap.docs[0].data() };
+
+            // 🔥 GARANTE CACHE
+            await carregarProdutos();
+
+            let p = cacheProdutos.find(p => p.codigo === cod);
+
+            // 🔥 FALLBACK (se não achou no cache)
+            if (!p) {
+                const q = query(collection(db, "produtos"), where("codigo", "==", cod));
+                const snap = await getDocs(q);
+
+                if (!snap.empty) {
+                    p = { id: snap.docs[0].id, ...snap.docs[0].data() };
+
+                    // adiciona no cache
+                    cacheProdutos.push(p);
+                }
+            }
+
+            if(p) {
                 carrinho.push({ ...p, qtd_carrinho: 1, id_carrinho: Date.now() + Math.random() });
                 atualizarPdv();
+            } else {
+                alert("Produto não encontrado");
             }
         }
+
         e.target.value = '';
     }
 });
@@ -119,14 +161,20 @@ window.finalizarVenda = async function() {
         metodo: metodo,
         recebido: recebido,
         troco: troco,
-        data: new Date().toISOString()
+        data: new Date(),
+        status: "concluida"
     };
 
     try {
         await addDoc(collection(db, "vendas"), dadosVenda);
+
         for(const item of carrinho) {
             await updateDoc(doc(db, "produtos", item.id), { estoque: increment(-item.qtd_carrinho) });
         }
+
+        // 🔥 ATUALIZA CACHE APÓS VENDA
+        await carregarProdutos(true);
+
         imprimirCupom(dadosVenda);
         limparPdv();
     } catch (e) { alert("Erro: " + e.message); }

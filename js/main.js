@@ -3,8 +3,9 @@ window.sair = function() { sessionStorage.clear(); window.location.href = 'login
 window.openTab = function(tabId) {
     const nivel = sessionStorage.getItem('nivelUsuario');
     
-    if (tabId === 'dashboard' && nivel !== 'admin' && nivel !== 'gerente') {
-        alert("Acesso Negado: Somente pessoas autorizadas podem acessar o Dashboard.");
+    // 🔥 BLOQUEIO DE SEGURANÇA: Nem dashboard nem histórico abrem se for operador
+    if ((tabId === 'dashboard' || tabId === 'historico-vendas') && nivel !== 'admin' && nivel !== 'gerente') {
+        alert("Acesso Negado: Somente pessoas autorizadas podem acessar esta tela.");
         return;
     }
 
@@ -36,6 +37,11 @@ window.openTab = function(tabId) {
     if(tabId === 'dashboard') {
         if(window.carregarDash) window.carregarDash();
     }
+
+    // 🔥 DE OLHO NA NOVA ABA: Se abrir o histórico, puxa os dados do Firebase
+    if(tabId === 'historico-vendas') {
+        if(window.carregarHistoricoVendas) window.carregarHistoricoVendas();
+    }
 }
 
 const nome = sessionStorage.getItem('nomeUsuario') || 'Usuário';
@@ -44,7 +50,32 @@ document.getElementById('info-usuario').innerText = nome;
 
 if (nivel !== 'admin' && nivel !== 'gerente') {
     document.getElementById('btn-nav-dash').style.opacity = '0.5';
+    // 🔥 Deixa o botão do histórico opaco também para o operador
+    const btnHist = document.getElementById('btn-nav-vendas-hist');
+    if (btnHist) btnHist.style.opacity = '0.5';
 }
 
 // Garante que a verificação de dinheiro só rode se a função existir no escopo global
 if(window.verificarDinheiro) window.verificarDinheiro();
+
+// Esconde o botões do Operador
+window.addEventListener('load', () => {
+    const nivel = sessionStorage.getItem('nivelUsuario');
+
+    // Esconder dashboard e Histórico se for operador
+    if (nivel === 'operador') {
+        const btnDash = document.getElementById('btn-nav-dash');
+        if (btnDash) btnDash.style.display = 'none';
+
+        // 🔥 Esconde o botão do histórico para o operador
+        const btnHist = document.getElementById('btn-nav-vendas-hist');
+        if (btnHist) btnHist.style.display = 'none';
+
+        // Esconder configurações
+        document.querySelectorAll('button').forEach(btn => {
+            if (btn.innerText.includes('⚙️')) {
+                btn.style.display = 'none';
+            }
+        });
+    }
+});
