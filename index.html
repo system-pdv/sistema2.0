@@ -19,12 +19,13 @@
     <div class="nav-group">
         <button class="nav-link active" onclick="openTab('vendas')">🛒 PDV</button>
         <button class="nav-link" onclick="openTab('estoque')">📦 Estoque</button>
+        <button id="btn-nav-vendas-hist" class="nav-link" onclick="openTab('historico-vendas')">📜 Histórico</button>
         <button id="btn-nav-dash" class="nav-link" onclick="openTab('dashboard')">📊 Dashboard</button>
     </div>
     
     <div style="display: flex; align-items: center; gap: 15px;">
         <span id="info-usuario" style="color: var(--text); font-size: 14px; opacity: 0.9; font-weight: bold;"></span>
-        <button onclick="openTab('config')" style="background: none; border: none; color: white; cursor: pointer; font-size: 18px;" title="Configurações">⚙️</button>
+        <button id="btn-config" onclick="openTab('config')" style="background: none; border: none; color: white; cursor: pointer; font-size: 18px;" title="Configurações">⚙️</button>
         <button class="btn-sair" onclick="sair()">🚪 SAIR</button>
     </div>
 </nav>
@@ -91,6 +92,34 @@
         </div>
     </div>
 
+<!-- ABA: HISTÓRICO DE VENDAS -->
+<div id="historico-vendas" class="tab-content">
+    <h2>📜 Histórico de Vendas</h2>
+    <p>Visualização e estorno de vendas realizadas no período selecionado.</p>
+    
+    <div class="filtros-container" style="margin-bottom: 20px; display: flex; gap: 10px;">
+        <input type="date" id="vendas-data-inicio">
+        <input type="date" id="vendas-data-fim">
+        <button id="btn-filtrar-vendas" style="padding: 8px 15px;">Filtrar</button>
+    </div>
+
+    <table border="1" style="width: 100%; border-collapse: collapse; text-align: left;">
+        <thead>
+            <tr style="background-color: #f2f2f2;">
+                <th style="padding: 10px;">Data/Hora</th>
+                <th style="padding: 10px;">Produtos</th>
+                <th style="padding: 10px;">Pagamento</th>
+                <th style="padding: 10px;">Total</th>
+                <th style="padding: 10px;">Status</th>
+                <th style="padding: 10px;">Ações</th>
+            </tr>
+        </thead>
+        <tbody id="lista-historico-vendas">
+            <!-- Inserido via JS -->
+        </tbody>
+    </table>
+</div>
+
     <div id="dashboard" class="tab-content">
         <div class="card">
             <h3>Filtros de Relatório</h3>
@@ -105,6 +134,8 @@
                     <option value="Crédito">Crédito</option>
                 </select>
                 <button class="btn btn-warning" onclick="carregarDash()">Filtrar Agora</button>
+                <button id="btn-limpar-filtros" class="btn" style="background: #2c3e50; color: white;">
+                 Limpar filtros</button>
                 <button class="btn" style="background: #34495e; color: white;" onclick="baixarCSVVendas()">📥 Baixar CSV</button>
             </div>
         </div>
@@ -116,7 +147,13 @@
                 <hr>
                 <p>Lucro Estimado: <span id="dash-lucro" style="font-weight: bold; font-size: 1.2em; color: var(--accent);">R$ 0,00</span></p>
             </div>
-            <div class="card"><h4>Vendas Hoje</h4><h2 id="dash-hoje">0</h2></div>
+            <div class="card">
+    <h4>Vendas no período</h4>
+    <h2 id="dash-hoje">0</h2>
+    <p style="margin: 5px 0 0 0; font-size: 0.9em; color: var(--danger); font-weight: bold;">
+        ❌ Estornadas: <span id="dash-estornos">0</span>
+    </p>
+</div>
             <div class="card"><h4>Estoque Baixo</h4><ul id="dash-alertas"></ul></div>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
@@ -168,10 +205,36 @@
     </div>
 </div>
 
+<!-- MODAL DE CONFIRMAÇÃO DE ESTORNO PERSONALIZADO -->
+<div id="modal-estorno" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div style="background: white; padding: 25px; border-radius: 8px; max-width: 400px; width: 90%; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2); font-family: sans-serif;">
+        <h3 style="margin-top: 0; color: #e74c3c; font-size: 20px;">⚠️ Confirmar Estorno</h3>
+        <p style="color: #555; font-size: 14px; line-height: 1.5; margin-bottom: 25px;">
+            Tem certeza que deseja estornar esta venda? Os produtos voltarão ao estoque e o faturamento será deduzido do dashboard.
+        </p>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+            <button id="btn-modal-cancelar" style="background: #95a5a6; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;">Voltar</button>
+            <button id="btn-modal-confirmar" style="background: #e74c3c; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold;">Sim, Estornar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL DE SUCESSO DE ESTORNO PERSONALIZADO -->
+<div id="modal-sucesso-estorno" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1001; align-items: center; justify-content: center;">
+    <div style="background: white; padding: 25px; border-radius: 8px; max-width: 400px; width: 90%; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2); font-family: sans-serif;">
+        <h3 style="margin-top: 0; color: #27ae60; font-size: 20px;">✅ Sucesso!</h3>
+        <p style="color: #555; font-size: 14px; line-height: 1.5; margin-bottom: 25px;">
+            Venda estornada com sucesso e os produtos já foram devolvidos ao estoque!
+        </p>
+        <button id="btn-modal-sucesso-ok" style="background: #27ae60; color: white; border: none; padding: 10px 30px; border-radius: 4px; cursor: pointer; font-weight: bold;">Ok</button>
+    </div>
+</div>
+
 <script type="module" src="js/firebase.js"></script>
 <script type="module" src="js/pdv.js"></script>
 <script type="module" src="js/estoque.js"></script>
 <script type="module" src="js/dashboard.js"></script>
+<script type="module" src="js/vendas.js"></script>
 <script type="module" src="js/admin.js"></script>
 
 <script src="js/main.js"></script>
